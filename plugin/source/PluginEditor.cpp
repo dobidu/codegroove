@@ -86,29 +86,24 @@ void CodeGrooveAudioProcessorEditor::drawAndConfigComponents() {
     addAndMakeVisible(stop_btn);
     stop_btn.setButtonText("Stop");
     stop_btn.setColour(juce::TextButton::buttonColourId, juce::Colours::red);
-    if (output_selector.getNumItems() == 0)    
-        stop_btn.setEnabled(false);
     stop_btn.onClick = [this] { onClick_Stop(); };
 
     // Save Button
     addAndMakeVisible(save_btn);
     save_btn.setButtonText("Save");
     save_btn.setColour(juce::TextButton::buttonColourId, juce::Colours::blue);
-    if (output_selector.getNumItems() == 0)    
-        save_btn.setEnabled(false);
     save_btn.onClick = [this] { onClick_Save(); };
 
     addAndMakeVisible(code_text);
     code_text.setMultiLine(true);
     code_text.setReadOnly(false);
 
-/*
     addAndMakeVisible(debug_text);
     debug_text.setMultiLine(true);
     debug_text.setReadOnly(true);
-*/
-    loadfile_btn.setBounds(10, 50, 100, 30);
-    file_lbl.setBounds(120, 50, 140, 30);
+
+    loadfile_btn.setBounds(10, 20, 100, 30);
+    file_lbl.setBounds(120, 20, 140, 30);
     file_lbl.setJustificationType(juce::Justification::topLeft);
     file_lbl.setFont(juce::Font(18.0f, juce::Font::bold));
 
@@ -118,11 +113,12 @@ void CodeGrooveAudioProcessorEditor::drawAndConfigComponents() {
 
     const int startX = (getWidth() - ((3*60)+20)) / 2;  //3 buttons + 20px spacing
 
-    play_btn.setBounds(startX, output_selector.getY() + 50, 60, 40);
-    pause_btn.setBounds(play_btn.getRight() + 10, output_selector.getY() + 50, 60, 40);
-    save_btn.setBounds(stop_btn.getRight() + 10, output_selector.getY() + 50, 60, 40);
+    play_btn.setBounds(startX, lang_selector.getY() + 50, 60, 40);
+    stop_btn.setBounds(play_btn.getRight() + 10, lang_selector.getY() + 50, 60, 40);
+    save_btn.setBounds(stop_btn.getRight() + 10, lang_selector.getY() + 50, 60, 40);
 
     code_text.setBounds(10, play_btn.getY() + 60, getWidth() - 20, 160);
+    debug_text.setBounds(10, code_text.getY() + 180, getWidth() - 20, 160);
 
 }
 
