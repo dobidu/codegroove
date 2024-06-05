@@ -1,8 +1,6 @@
 /* Description: This file contains the declaration of the 
 CodeGrooveAudioProcessorEditor class, which is responsible for the GUI of the 
-plugin. It contains the declarations of the ConfigWindow and ContentComponent
-classes, which are used for setting the API key and audio playback, 
-respectively.
+plugin.
 */
 
 #pragma once
