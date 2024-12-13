@@ -2,6 +2,11 @@
 
 #include <JuceHeader.h>
 
+#include <barrier>
+#include <memory>
+
+namespace py = pybind11;
+
 //==============================================================================
 /**
 */
@@ -9,6 +14,7 @@ class CodeGrooveAudioProcessor  : public juce::AudioProcessor
                             #if JucePlugin_Enable_ARA
                              , public juce::AudioProcessorARAExtension
                             #endif
+                             , public juce::Thread
 {
 public:
     //==============================================================================
@@ -24,6 +30,7 @@ public:
    #endif
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    using AudioProcessor::processBlock;
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -48,7 +55,15 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    //==============================================================================
+    void setPythonCode(juce::String code);
+    void run() override;
+    std::unique_ptr<PyConfig> setupPythonConfig(std::function<juce::MemoryBlock (const char*)> standardLibraryCallback);
 private:
     //==============================================================================
+    juce::String pythonCode;
+    juce::AudioBuffer<float> audioBuffer;
+    std::barrier<> audioReady{2};
+    std::barrier<> pythonReady{2};
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CodeGrooveAudioProcessor)
 };

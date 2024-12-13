@@ -2,9 +2,13 @@
 #include "codegroove/PluginEditor.h"
 
 //==============================================================================
-CodeGrooveAudioProcessor::CodeGrooveAudioProcessor()
+
+JUCE_PYTHON_DEFINE_EMBEDDED_MODULES 
+
+//==============================================================================
+CodeGrooveAudioProcessor::CodeGrooveAudioProcessor() :
 #ifndef JucePlugin_PreferredChannelConfigurations
-     : AudioProcessor (BusesProperties()
+      AudioProcessor (BusesProperties()
                      #if ! JucePlugin_IsMidiEffect
                       #if ! JucePlugin_IsSynth
                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
@@ -12,12 +16,24 @@ CodeGrooveAudioProcessor::CodeGrooveAudioProcessor()
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
                        )
+    , 
 #endif
+    Thread("CodeGroovePython Thread")
 {
+    setPythonCode(juce::String());
+    
+    startThread();
+
+    std::cout << "Ready\n";
 }
 
 CodeGrooveAudioProcessor::~CodeGrooveAudioProcessor()
 {
+    signalThreadShouldExit();
+
+    audioReady.arrive_and_wait();
+
+    waitForThreadToExit(10000);
 }
 
 //==============================================================================
@@ -71,22 +87,27 @@ int CodeGrooveAudioProcessor::getCurrentProgram()
 
 void CodeGrooveAudioProcessor::setCurrentProgram (int index)
 {
+    juce::ignoreUnused (index);
 }
 
 const juce::String CodeGrooveAudioProcessor::getProgramName (int index)
 {
+    juce::ignoreUnused (index);
     return {};
 }
 
 void CodeGrooveAudioProcessor::changeProgramName (int index, const juce::String& newName)
 {
+    juce::ignoreUnused (index, newName);
 }
+
 
 //==============================================================================
 void CodeGrooveAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
+    juce::ignoreUnused(sampleRate);
+
+    audioBuffer.setSize(2, samplesPerBlock);
 }
 
 void CodeGrooveAudioProcessor::releaseResources()
@@ -123,30 +144,26 @@ bool CodeGrooveAudioProcessor::isBusesLayoutSupported (const BusesLayout& layout
 
 void CodeGrooveAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
+    juce::ignoreUnused (midiMessages);
+
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
+    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i){
+        buffer.clear(i, 0, buffer.getNumSamples());
+    }
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
+    // Do the buffer swap with the processed buffer from python
+    if(isThreadRunning() && !threadShouldExit()){
+        for (int i = 0; i < buffer.getNumChannels(); i++){
+            audioBuffer.copyFrom(i, 0, buffer, i, 0, buffer.getNumSamples());
+        }
 
-        // ..do something to the data...
+        audioReady.arrive_and_wait();
+        pythonReady.arrive_and_wait();
+
+        std::swap(buffer, audioBuffer);
     }
 }
 
@@ -164,6 +181,7 @@ juce::AudioProcessorEditor* CodeGrooveAudioProcessor::createEditor()
 //==============================================================================
 void CodeGrooveAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
+    juce::ignoreUnused (destData);
     // You should use this method to store your parameters in the memory block.
     // You could do that either as raw data, or use the XML or ValueTree classes
     // as intermediaries to make it easy to save and load complex data.
@@ -171,6 +189,7 @@ void CodeGrooveAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 
 void CodeGrooveAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
+    juce::ignoreUnused (data, sizeInBytes);
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
 }
@@ -180,4 +199,87 @@ void CodeGrooveAudioProcessor::setStateInformation (const void* data, int sizeIn
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new CodeGrooveAudioProcessor();
+}
+
+//==============================================================================
+void CodeGrooveAudioProcessor::setPythonCode(juce::String code){
+    pythonCode = code;
+}
+
+void CodeGrooveAudioProcessor::run(){
+    auto engine = new popsicle::ScriptEngine(setupPythonConfig(
+        [](const char* resourceName) -> juce::MemoryBlock {
+            int dataSize = 0;
+            auto data = BinaryData::getNamedResource(resourceName, dataSize);
+            return { data, static_cast<size_t>(dataSize) };
+        }
+    ));
+
+    py::dict locals;
+    py::gil_scoped_acquire guard{};
+
+    // Import python libraries
+    try {
+        locals["juce_audio_buffer"] = py::module_::import("popsicle").attr("AudioSampleBuffer");
+        locals["np"] = py::module_::import("numpy");
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+    }
+    
+    // Process buffer
+    while(!threadShouldExit()){
+        audioReady.arrive_and_wait();
+
+        locals["buffer"] = audioBuffer;
+
+        auto result = engine->runScript(pythonCode.toRawUTF8(), locals);
+
+        if(result.failed()){
+            std::cout << result.getErrorMessage();
+        }
+
+        pythonReady.arrive_and_wait();
+    }
+}
+
+//==============================================================================
+std::unique_ptr<PyConfig> CodeGrooveAudioProcessor::setupPythonConfig(std::function<juce::MemoryBlock (const char*)> standardLibraryCallback)
+{
+    juce::String pythonFolderName, pythonArchiveName;
+    juce::String projectName = getName();
+    pythonFolderName << "python" << PY_MAJOR_VERSION << "." << PY_MINOR_VERSION;
+    pythonArchiveName << "python" << PY_MAJOR_VERSION << PY_MINOR_VERSION << "_zip";
+
+    auto tempPath = juce::File::getSpecialLocation(juce::File::tempDirectory);
+    //tempPath.deleteRecursively();
+
+    if (!tempPath.isDirectory()) tempPath.createDirectory();
+
+    auto libPath = tempPath.getChildFile("lib");
+    if (!libPath.isDirectory()) libPath.createDirectory();
+
+    auto pythonPath = libPath.getChildFile(pythonFolderName);
+    if (!pythonPath.isDirectory()) pythonPath.createDirectory();
+
+    if (!pythonPath.getChildFile("lib-dynload").isDirectory())
+    {
+        juce::MemoryBlock mb = standardLibraryCallback(pythonArchiveName.toRawUTF8());
+
+        auto mis = juce::MemoryInputStream (mb.getData(), mb.getSize(), false);
+
+        auto zip = juce::ZipFile(mis);
+        zip.uncompressTo(pythonPath);
+    }
+
+    auto config = std::make_unique<PyConfig>();
+
+    PyConfig_InitPythonConfig (config.get());
+    config->parse_argv = 0;
+    config->isolated = 1;
+    config->install_signal_handlers = 0;
+    config->program_name = Py_DecodeLocale(projectName.toRawUTF8(), nullptr);
+    config->home = Py_DecodeLocale(tempPath.getFullPathName().toRawUTF8(), nullptr);
+    config->pythonpath_env = Py_DecodeLocale(pythonPath.getChildFile("site-packages").getFullPathName().toRawUTF8(), nullptr);
+
+    return config;
 }

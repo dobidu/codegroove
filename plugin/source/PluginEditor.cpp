@@ -5,7 +5,6 @@ has a constructor that receives a reference to the CodeGrooveAudioProcessor clas
 is the class that implements the audio processing logic of the plugin. 
 
 */
-
 #include <cpr/cpr.h>
 
 #include "codegroove/PluginProcessor.h"
@@ -28,7 +27,7 @@ CodeGrooveAudioProcessorEditor::CodeGrooveAudioProcessorEditor (CodeGrooveAudioP
 
 CodeGrooveAudioProcessorEditor::~CodeGrooveAudioProcessorEditor()
 {
-
+    
 }
 
 
@@ -80,7 +79,6 @@ void CodeGrooveAudioProcessorEditor::drawAndConfigComponents() {
     addAndMakeVisible(play_btn);
     play_btn.setButtonText("Play");
     play_btn.setColour(juce::TextButton::buttonColourId, juce::Colours::green);
-
     play_btn.onClick = [this] { onClick_Play(); };
 
     addAndMakeVisible(stop_btn);
@@ -125,12 +123,12 @@ void CodeGrooveAudioProcessorEditor::drawAndConfigComponents() {
 
 void CodeGrooveAudioProcessorEditor::onClick_Play()
 {
-
+    audioProcessor.setPythonCode(code_text.getText());
 }
 
 void CodeGrooveAudioProcessorEditor::onClick_Stop()
 {
-
+    audioProcessor.setPythonCode("");
 }
 
 
@@ -160,7 +158,7 @@ void CodeGrooveAudioProcessorEditor::onClick_Save()
 //==============================================================================
 void CodeGrooveAudioProcessorEditor::paint (juce::Graphics& g)
 {
-
+    juce::ignoreUnused (g);
 }
 
 void CodeGrooveAudioProcessorEditor::resized()

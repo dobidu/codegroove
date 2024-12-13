@@ -10,7 +10,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 # Always use the newest C++ standard on green-field projects if possible.
 set(CMAKE_CXX_STANDARD 20)
 
-add_subdirectory(submodules/JUCE)
+# Set PIC proprety
+set(POSITION_INDEPENDENT_CODE TRUE)
+
+# Add submodules directories
+add_subdirectory(submodules/popsicle/JUCE)
+add_subdirectory(submodules/popsicle/modules)
 
 # Fetch libcpr
 include(FetchContent)
@@ -29,5 +34,6 @@ FetchContent_MakeAvailable(json)
 
 #CAIO: workaround for non async file chooser
 add_definitions(-DJUCE_MODAL_LOOPS_PERMITTED=1)
+
 # Adds all the targets configured in the "plugin" folder.
 add_subdirectory(plugin)

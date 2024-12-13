@@ -1,3 +1,4 @@
-[submodule "submodules/JUCE"]
-	path = submodules/JUCE
-	url = https://github.com/juce-framework/JUCE
+[submodule "submodules/popsicle"]
+	path = submodules/popsicle
+	url = https://github.com/kunitoki/popsicle
+	branch = dev/python_embedded_plugin
